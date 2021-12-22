@@ -1,4 +1,4 @@
-# create a simple decision model using tidymodels 
+# create a simple decision model using tidymodels to predict diabetes
 
 # load packages
 library(tidymodels) # modeling
