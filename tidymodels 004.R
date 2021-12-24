@@ -2,7 +2,7 @@
 # with cross validation
 
 # load package
-librarylibrary(tidymodels)
+library(tidymodels)
 library(rpart.plot) # plot tree
 library(vip) # feature importance
 

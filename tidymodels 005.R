@@ -1,5 +1,7 @@
-# create a simple decision model using tidymodels to predict customer churn
-# with hyper parameter tuning + cross validation
+# building a decision tree model using tidymodels - part 3
+# bagged tress = more powerful than single decision trees (bootstrap with replacement approach)
+
+# create a simple bagged tree model using tidymodels to predict customer churn
 
 # load package
 library(tidymodels)
@@ -34,11 +36,67 @@ glimpse(customers)
 # $ total_ct_chng_q4_q1      <dbl> 1.625, 3.714, 2.333, 2.333, 2.500, 0.846, 0.722, 0.714, 1.182, 0.882, 0.680, 1.364, 3.250, …
 # $ avg_utilization_ratio    <dbl> 0.061, 0.105, 0.000, 0.760, 0.000, 0.311, 0.066, 0.048, 0.113, 0.144, 0.217, 0.174, 0.000, …
 
-# Create a specification with tuning placeholders
-tune_spec <- decision_tree(tree_depth = tune(),
-                           cost_complexity = tune()) %>% 
-  set_mode("classification") %>%
-  set_engine("rpart") 
+# Create the specification
+spec_bagged <- baguette::bag_tree() %>% 
+  set_mode("classification") %>% 
+  set_engine("rpart", times = 100) # 100 bagged trees
+
+spec_bagged
+
+# split data 
+set.seed(222) 
+customers_split <- initial_split(customers, prop = 0.8, strata = still_customer) # enforce similar distributions
+
+# <Analysis/Assess/Total>
+# <8101/2026/10127>
+
+customers_train <- training(customers_split); nrow(customers_train) # 8101
+customers_test <- testing(customers_split); nrow(customers_test) # 2026
+
+# Fit to the training data
+model_bagged <- fit(spec_bagged,
+                    still_customer ~ total_trans_amt + customer_age + education_level, 
+                    customers_train)
+
+# Variable importance
+model_bagged
+
+# term            value std.error  used
+# total_trans_amt 1564.      4.60   100 
+# customer_age     659.      2.63   100
+# education_level  224.      1.72   100
+
+# total_trans_amt is the most important var. where education_level is not
+
+# Predict on training set and add to training set
+predictions <- predict(model_bagged,
+                       new_data = customers_test, 
+                       type = "prob") %>% 
+  bind_cols(customers_test)
+
+# Create and plot the ROC curve
+roc_curve(predictions, 
+          estimate = .pred_no, 
+          truth = still_customer) %>% autoplot()
+
+# Calculate the AUC
+roc_auc(predictions,
+        estimate = .pred_no, 
+        truth = still_customer) # 0.868
+
+set.seed(55)
+
+# Estimate AUC using cross-validation
+cv_results <- fit_resamples(spec_bagged,
+                            still_customer ~ total_trans_amt + customer_age + education_level, 
+                            resamples = vfold_cv(customers_test, v = 3),
+                            metrics = metric_set(roc_auc))
+
+# Collect metrics
+collect_metrics(cv_results)
+
+# .metric .estimator  mean     n std_err .config             
+# roc_auc binary     0.887     3 0.00242 Preprocessor1_Model1
 
 # split data 
 set.seed(222) 
@@ -51,44 +109,8 @@ customers_split
 customers_train <- training(customers_split); nrow(customers_train) # 8101
 customers_test <- testing(customers_split); nrow(customers_test) # 2026
 
-# Create a regular grid
-tree_grid <- grid_regular(parameters(tune_spec), levels = 2)
-
-tree_grid
-
-# Create CV folds of the customers tibble
-set.seed(275)
-folds <- vfold_cv(customers_train, v = 3)
-
-# Tune along the grid
-tune_results <- tune_grid(tune_spec, 
-                          still_customer ~ .,
-                          resamples = folds,
-                          grid = tree_grid,
-                          metrics = metric_set(accuracy))
-
-tune_results
-
-# Plot the tuning results
-autoplot(tune_results)
-
-# Select the parameters that perform best
-final_params <- select_best(tune_results)
-
-# Finalize the specification
-best_spec <- finalize_model(tune_spec, final_params)
-
 # Build the final model
 final_model <- fit(best_spec, still_customer ~ ., customers_train)
-
-final_model
-
-# plot decision tree
-final_model$fit %>% 
-  rpart.plot(type = 4, extra = 2, roundint = FALSE)
-
-# feature importance
-vip(final_model)
 
 # predicting on new data
 prediction_class <- predict(final_model, new_data = customers_test, type = "class")
@@ -130,4 +152,3 @@ roc_auc(prediction_all, estimate = .pred_no, truth = still_customer) # 0.941
 roc_curve(prediction_all, estimate = .pred_no, truth = still_customer) %>% 
   autoplot()
 
-# need to re-visit the code
