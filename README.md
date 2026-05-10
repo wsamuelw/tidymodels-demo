@@ -1,4 +1,4 @@
-# Tidymodels Demo
+# Tidymodels
 
 Progressive comparison of tree-based models for customer churn prediction — from single decision trees to tuned XGBoost — using the tidymodels framework in R.
 
@@ -40,8 +40,8 @@ The scripts progress from simple to complex, each building on the last:
 ## Setup
 
 ```bash
-git clone https://github.com/wsamuelw/tidymodels-demo.git
-cd tidymodels-demo
+git clone https://github.com/wsamuelw/tidymodels.git
+cd tidymodels
 ```
 
 ```r
